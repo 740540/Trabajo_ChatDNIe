@@ -1,0 +1,5 @@
+cryptography>=41.0.0
+pynoise>=0.1.0
+zeroconf>=0.131.0
+asn1crypto>=1.5.1
+pyscard>=2.0.7
