@@ -1,0 +1,12 @@
+{
+  "2680972aba9ec236": {
+    "name": "Peer_192.168.0.17",
+    "public_key": "353edb4c24b8dd3efeff03d64cac5a26fde2f7e4e2c963a7436255716ea6ff10",
+    "first_seen": "posix.times_result(user=0.66, system=0.27, children_user=0.0, children_system=0.0, elapsed=1763925930.02)"
+  },
+  "7ad46aaff9fd125f": {
+    "name": "Peer_192.168.0.17",
+    "public_key": "0a80185b158f2437170aa619065d690eaee8e8c0266fadb34d73b3c730cc8951",
+    "first_seen": "posix.times_result(user=0.63, system=0.24, children_user=0.0, children_system=0.0, elapsed=1763926237.46)"
+  }
+}
