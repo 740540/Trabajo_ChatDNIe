@@ -21,6 +21,7 @@ class ServiceDiscovery:
         self.service_info: Optional[ServiceInfo] = None
         self.discovered_peers: Dict[str, Peer] = {}
         self.on_peer_discovered_callback: Optional[Callable[[Peer], None]] = None
+        self.on_peer_disconnected_callback = None
     
     async def start_advertising(self, username: str):
         """Advertise presence on local network with DNIe identity"""
@@ -88,8 +89,13 @@ class ServiceDiscovery:
             if name in self.discovered_peers:
                 removed_peer = self.discovered_peers[name]
                 print(f"👋 Peer desconectado: {removed_peer.name}")
+                
+                # Notify messenger about disconnection (NEW)
+                if self.on_peer_disconnected_callback:
+                    self.on_peer_disconnected_callback(removed_peer)
+
                 del self.discovered_peers[name]
-    
+            
     async def stop_advertising(self):
         """Stop advertising and cleanup"""
         if self.aiozc and self.service_info:
