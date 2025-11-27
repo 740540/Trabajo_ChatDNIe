@@ -1,3 +1,5 @@
-"""DNIe Instant Messenger - Peer-to-peer chat with hardware-backed identity"""
+# dnie_im/ui/__init__.py
 
-__version__ = "0.1.0"
+from .tui import ChatTUI
+
+__all__ = ['ChatTUI']

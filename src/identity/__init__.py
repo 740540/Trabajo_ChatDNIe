@@ -1,3 +1,6 @@
-"""DNIe Instant Messenger - Peer-to-peer chat with hardware-backed identity"""
+# dnie_im/identity/__init__.py
 
-__version__ = "0.1.0"
+from .im_identity import IMIdentity
+from .dnie import DNIeManager
+
+__all__ = ['IMIdentity', 'DNIeManager']

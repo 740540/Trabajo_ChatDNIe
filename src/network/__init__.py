@@ -1,3 +1,6 @@
-"""DNIe Instant Messenger - Peer-to-peer chat with hardware-backed identity"""
+# dnie_im/network/__init__.py
 
-__version__ = "0.1.0"
+from .discovery import ServiceDiscovery
+from .transport import UDPTransport
+
+__all__ = ['ServiceDiscovery', 'UDPTransport']
