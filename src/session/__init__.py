@@ -1,3 +1,7 @@
-"""DNIe Instant Messenger - Peer-to-peer chat with hardware-backed identity"""
+# dnie_im/session/__init__.py
 
-__version__ = "0.1.0"
+from .session import Session, Peer
+from .contact_book import ContactBook
+from .chat_history import ChatHistoryManager
+
+__all__ = ['Session', 'Peer', 'ContactBook', 'ChatHistoryManager']

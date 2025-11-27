@@ -1,3 +1,6 @@
-"""DNIe Instant Messenger - Peer-to-peer chat with hardware-backed identity"""
+# dnie_im/crypto/__init__.py
 
-__version__ = "0.1.0"
+from .noise_ik import NoiseIKState
+from .protocol import ProtocolFrame
+
+__all__ = ['NoiseIKState', 'ProtocolFrame']
