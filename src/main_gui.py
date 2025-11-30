@@ -7,6 +7,7 @@ FIXED: Proper window close detection.
 
 import asyncio
 import getpass
+import tkinter as tk
 
 from messenger import DNIeMessenger
 
@@ -178,6 +179,18 @@ async def run_gui_async(messenger):
             pass
 
         print("[DEBUG] Cierre completado")
+
+        # Wipe all session keys
+        for session in messenger.peer_sessions.values():
+            session.send_key = b'\x00' * 32
+            session.recv_key = b'\x00' * 32
+        messenger.peer_sessions.clear()
+
+        # Clear GUI
+        try:
+            gui.messagestext.delete('1.0', 'end')
+        except:
+            pass
 
 
 if __name__ == "__main__":

@@ -370,11 +370,7 @@ class ChatGUI:
                         msg_type = msg.get('type', 'user')
 
                         # Check if this is our message
-                        is_our_message = (sender == self.username or 
-                                        sender.lower() == self.username.lower() or
-                                        msg_type == 'queued')
-
-                        if is_our_message:
+                        if msg_type in ["user", "queued"]:
                             sender = "Tú"
 
                         self._display_message(sender, text, timestamp, msg_type)
