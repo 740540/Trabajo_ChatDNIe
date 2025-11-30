@@ -266,6 +266,11 @@ class DNIeMessenger:
 
         # Remove from peer_sessions mapping and handshake tracking
         if peer_key in self.peer_sessions:
+            session = self.peer_sessions[peer_key] # Se limpian las claves de sesión antes de cerrar para que no se queden en memoria
+            # Wipe keys before deletion
+            session.send_key = b'\x00' * 32
+            session.recv_key = b'\x00' * 32
+            del self.peer_sessions[peer_key]
             del self.peer_sessions[peer_key]
             print(f"[DEBUG] Removed session for {peer.name}")
 
