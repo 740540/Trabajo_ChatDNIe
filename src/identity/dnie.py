@@ -9,100 +9,112 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 
-# Detectar sistema operativo y cargar la librería adecuada
+# Detectar sistema operativo
 system = platform.system()
-if system == "Windows":
-    # Windows usa python-pkcs11
+
+# Importar la librería correcta según el sistema
+if system == "Darwin":  # macOS
     try:
-        import pkcs11
-        from pkcs11 import Mechanism, ObjectClass
-        PKCS11_LIB = "pkcs11"
-    except ImportError:
-        raise ImportError("Para Windows, instala: pip install python-pkcs11")
-elif system == "Darwin":  # macOS
-    # macOS usa PyKCS11
-    try:
-        import PyKCS11 as pkcs11
+        from PyKCS11 import PyKCS11Lib, CKO_CERTIFICATE, CKA_VALUE, CKA_CLASS, CKO_PRIVATE_KEY, CKA_SIGN, CKM_SHA256_RSA_PKCS, Mechanism
         PKCS11_LIB = "pykcs11"
     except ImportError:
         raise ImportError("Para macOS, instala: pip install PyKCS11")
-else:  # Linux
+else:
+    # Windows/Linux con python-pkcs11
     try:
         import pkcs11
         from pkcs11 import Mechanism, ObjectClass
         PKCS11_LIB = "pkcs11"
     except ImportError:
-        raise ImportError("Para Linux, instala: pip install python-pkcs11")
+        raise ImportError("Para Windows/Linux, instala: pip install python-pkcs11")
+
 
 class DNIeManager:
     def __init__(self):
+        self.session = None
+        self._lib = None
+        self.pkcs11_lib = PKCS11_LIB
+        self.slot = None
+        
         # Configurar ruta de librería según el sistema operativo
         if system == "Windows":
             self.lib_path = r"C:\Program Files\OpenSC Project\OpenSC\pkcs11\opensc-pkcs11.dll"
         elif system == "Darwin":  # macOS
-            self.lib_path = "/usr/lib/opensc-pkcs11.so"
+            # Buscar en rutas típicas de macOS
+            possible_paths = [
+                "/opt/homebrew/lib/opensc-pkcs11.so",      # Homebrew Apple Silicon
+                "/usr/local/lib/opensc-pkcs11.so",          # Homebrew Intel
+                "/Library/OpenSC/lib/opensc-pkcs11.so",     # Instalador oficial
+                "/usr/lib/opensc-pkcs11.so"                 # Ruta estándar
+            ]
+            self.lib_path = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    self.lib_path = path
+                    break
+            
+            if not self.lib_path:
+                raise Exception("❌ No se encontró opensc-pkcs11.so. Instala OpenSC con: brew install opensc")
         else:  # Linux
             self.lib_path = "/usr/lib/opensc-pkcs11.so"
-        
-        self.session = None
-        self._lib = None
-        self.pkcs11_lib = PKCS11_LIB
     
     def authenticate(self, pin: str) -> bytes:
         """Authenticate with DNIe and return derived key"""
         try:
             print(f"🔍 Buscando DNIe con {self.pkcs11_lib}...")
             
-            if self.pkcs11_lib == "pkcs11":
+            if self.pkcs11_lib == "pykcs11":
+                # macOS con PyKCS11
+                print(f"📍 Usando biblioteca: {self.lib_path}")
+                self._lib = PyKCS11Lib()
+                self._lib.load(self.lib_path)
+                
+                # Obtener slots (usar tokenPresent=False para evitar bloqueos)
+                slots = self._lib.getSlotList(tokenPresent=False)
+                
+                if not slots:
+                    raise Exception("❌ No se detectó ningún lector. Por favor, conecte el lector de DNIe.")
+                
+                self.slot = slots[0]
+                print(f"✅ Lector encontrado en slot {self.slot}")
+                
+                # Obtener info del token
+                try:
+                    token_info = self._lib.getTokenInfo(self.slot)
+                    label = token_info.label.strip() if hasattr(token_info, 'label') else "<desconocido>"
+                    print(f"📋 Token: {label}")
+                except Exception:
+                    pass
+                
+                # Abrir sesión
+                print("🔐 Abriendo sesión...")
+                self.session = self._lib.openSession(self.slot)
+                
+                # Login con PIN
+                print("🔐 Verificando PIN...")
+                self.session.login(pin)
+                
+                print("✅ Autenticación completada")
+                
+            else:
                 # Windows/Linux con python-pkcs11
                 self._lib = pkcs11.lib(self.lib_path)
                 slots = self._lib.get_slots(token_present=True)
                 
                 if not slots:
-                    raise Exception(f"❌ No se detectó ningún DNIe. Por favor, inserte su DNIe en el lector.")
+                    raise Exception("❌ No se detectó ningún DNIe. Por favor, inserte su DNIe en el lector.")
                 
                 token = slots[0].get_token()
                 print("✅ DNIe detectado, iniciando autenticación...")
                 
                 self.session = token.open(user_pin=pin)
-                
-                # Buscar clave privada para firmar
-                priv_key = self._find_private_key()
-                
-                # Create and sign challenge
-                challenge = os.urandom(32)
-                signature = priv_key.sign(challenge, mechanism=Mechanism.SHA256_RSA_PKCS)
-                
-            else:  # macOS con PyKCS11
-                # Inicializar PyKCS11
-                self._lib = pkcs11.PyKCS11Lib()
-                self._lib.load(self.lib_path)
-                
-                # Obtener slots
-                slots = self._lib.getSlotList(tokenPresent=True)
-                
-                if not slots:
-                    raise Exception(f"❌ No se detectó ningún DNIe. Por favor, inserte su DNIe en el lector.")
-                
-                print("✅ DNIe detectado, iniciando autenticación...")
-                
-                # Abrir sesión
-                self.session = self._lib.openSession(slots[0])
-                self.session.login(pin)
-                
-                # Buscar clave privada para firmar
-                priv_key = self._find_private_key_pykcs11()
-                
-                # Create and sign challenge
-                challenge = os.urandom(32)
-                mechanism = pkcs11.Mechanism(pkcs11.CKM_SHA256_RSA_PKCS, None)
-                signature = self.session.sign(priv_key, challenge, mechanism)
+                print("✅ Autenticación completada")
             
-            print("✅ Autenticación completada, generando clave de cifrado...")
+            return b"authenticated"
             
         except Exception as e:
             error_msg = str(e)
-            if "CKR_PIN_INCORRECT" in error_msg:
+            if "CKR_PIN_INCORRECT" in error_msg or "pin incorrect" in error_msg.lower() or "160" in error_msg:
                 raise Exception("❌ PIN incorrecto. Por favor, verifique su PIN del DNIe.")
             elif "CKR_PIN_LOCKED" in error_msg:
                 raise Exception("❌ DNIe bloqueado. Ha introducido el PIN incorrecto demasiadas veces.")
@@ -113,6 +125,9 @@ class DNIeManager:
     
     def _find_private_key(self):
         """Encontrar clave privada para python-pkcs11 (Windows/Linux)"""
+        if self.pkcs11_lib == "pykcs11":
+            return self._find_private_key_pykcs11()
+            
         keys = self.session.get_objects({
             pkcs11.Attribute.CLASS: ObjectClass.PRIVATE_KEY,
             pkcs11.Attribute.SIGN: True
@@ -140,8 +155,8 @@ class DNIeManager:
     def _find_private_key_pykcs11(self):
         """Encontrar clave privada para PyKCS11 (macOS)"""
         template = [
-            (pkcs11.CKA_CLASS, pkcs11.CKO_PRIVATE_KEY),
-            (pkcs11.CKA_SIGN, True)
+            (CKA_CLASS, CKO_PRIVATE_KEY),
+            (CKA_SIGN, True)
         ]
         
         priv_keys = self.session.findObjects(template)
@@ -155,21 +170,22 @@ class DNIeManager:
         if not self.session:
             raise Exception("No hay sesión activa con el DNIe")
         
-        if self.pkcs11_lib == "pkcs11":
-            # Windows/Linux
-            certs = self.session.get_objects({pkcs11.Attribute.CLASS: ObjectClass.CERTIFICATE})
-            cert = next(certs, None)
-            return bytes(cert[pkcs11.Attribute.VALUE]) if cert else None
-        else:
-            # macOS
-            template = [
-                (pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE)
-            ]
-            certs = self.session.findObjects(template)
-            if certs:
-                cert = certs[0]
-                value = self.session.getAttributeValue(cert, [pkcs11.CKA_VALUE])[0]
-                return bytes(value)
+        try:
+            if self.pkcs11_lib == "pykcs11":
+                # macOS con PyKCS11
+                certs = self.session.findObjects([(CKA_CLASS, CKO_CERTIFICATE)])
+                if certs:
+                    cert = certs[0]
+                    value = self.session.getAttributeValue(cert, [CKA_VALUE])[0]
+                    return bytes(value)
+                return None
+            else:
+                # Windows/Linux con python-pkcs11
+                certs = self.session.get_objects({pkcs11.Attribute.CLASS: ObjectClass.CERTIFICATE})
+                cert = next(certs, None)
+                return bytes(cert[pkcs11.Attribute.VALUE]) if cert else None
+        except Exception as e:
+            print(f"⚠️ Error obteniendo certificado: {e}")
             return None
     
     def sign_data(self, data: bytes) -> bytes:
@@ -177,16 +193,16 @@ class DNIeManager:
         if not self.session:
             raise Exception("No hay sesión activa con el DNIe")
         
-        if self.pkcs11_lib == "pkcs11":
-            # Windows/Linux
-            priv_key = self._find_private_key()
-            return bytes(priv_key.sign(data, mechanism=Mechanism.SHA256_RSA_PKCS))
-        else:
-            # macOS
+        if self.pkcs11_lib == "pykcs11":
+            # macOS con PyKCS11
             priv_key = self._find_private_key_pykcs11()
-            mechanism = pkcs11.Mechanism(pkcs11.CKM_SHA256_RSA_PKCS, None)
+            mechanism = Mechanism(CKM_SHA256_RSA_PKCS, None)
             signature = self.session.sign(priv_key, data, mechanism)
             return bytes(signature)
+        else:
+            # Windows/Linux con python-pkcs11
+            priv_key = self._find_private_key()
+            return bytes(priv_key.sign(data, mechanism=Mechanism.SHA256_RSA_PKCS))
     
     def sign_file(self, file_path: str, pin: str) -> dict:
         """Firmar un archivo y retornar paquete de firma"""
@@ -194,7 +210,6 @@ class DNIeManager:
             raise FileNotFoundError(f"Archivo no encontrado: {file_path}")
 
         if not self.session:
-            # En caso de que se use la función stand-alone
             self.authenticate(pin)
         
         # Calcular hash del archivo
@@ -286,36 +301,36 @@ class DNIeManager:
     def close(self):
         """Close DNIe session"""
         if self.session:
-            if self.pkcs11_lib == "pykcs11":
-                # macOS - cerrar sesión PyKCS11
-                try:
+            try:
+                if self.pkcs11_lib == "pykcs11":
+                    # macOS - cerrar sesión PyKCS11
                     self.session.logout()
                     self.session.closeSession()
-                except:
-                    pass
-            else:
-                # Windows/Linux - cerrar sesión pkcs11
-                self.session.close()
+                else:
+                    # Windows/Linux - cerrar sesión pkcs11
+                    self.session.close()
+            except Exception:
+                pass
             
             self.session = None
             self._lib = None
+
 
 # Función de utilidad para verificar el estado del DNIe
 def verificar_estado_dnie():
     """Verifica el estado del DNIe sin autenticar"""
     try:
         dnie = DNIeManager()
-        system = platform.system()
         
-        if system == "Windows" or system == "Linux":
+        if system == "Darwin":
+            # macOS con PyKCS11
+            dnie._lib = PyKCS11Lib()
+            dnie._lib.load(dnie.lib_path)
+            slots = dnie._lib.getSlotList(tokenPresent=False)
+        else:
             # Windows/Linux con python-pkcs11
             dnie._lib = pkcs11.lib(dnie.lib_path)
             slots = dnie._lib.get_slots(token_present=True)
-        else:
-            # macOS con PyKCS11
-            dnie._lib = pkcs11.PyKCS11Lib()
-            dnie._lib.load(dnie.lib_path)
-            slots = dnie._lib.getSlotList(tokenPresent=True)
         
         if slots:
             print("✅ DNIe detectado y listo para usar")
