@@ -288,9 +288,14 @@ Los logs de depuración muestran:
 
 ---
 
-## 👨‍💻 Autor
+## 👨‍💻 Autores
 
-Proyecto desarrollado para la asignatura de Ciberseguridad.
+Daniel Pérez Mancebón
+Francisco Bosqued Lahoz
+
+En cuanto al reparto de trabajo sí es verdad que Daniel ha estado trabajando en una versión con servidor remoto 
+que al final no ha terminando funcionando, pero Fran ha hecho prácticamente toda la versión final y sobre todo 
+ha gestionado todo lo relacionado con el GitHub. Así que el reparto de tareas se quedaría en un 60% Fran y 40% Daniel.
 
 ---
 
